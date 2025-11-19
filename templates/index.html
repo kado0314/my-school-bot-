@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>School AI Bot</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <header>
+        <a href="https://www.bit.urayama.ac.jp/" class="back-button">
+            <i class="fas fa-arrow-left"></i> 学校トップへ戻る
+        </a>
+        <h1>質問応答ボット</h1>
+    </header>
+
+    <main id="chat-container">
+        <div class="chat-message bot-message">
+            <img src="{{ url_for('static', filename='bitboticon.png') }}" alt="Bot Icon" class="bot-icon">
+            <div class="message-content">
+                こんにちは！Googleドライブの資料に基づいてお答えします。何でも聞いてください。
+            </div>
+        </div>
+    </main>
+
+    <div class="input-area">
+        <input type="text" id="user-input" placeholder="質問を入力してください...">
+        <button onclick="sendMessage()">送信</button>
+    </div>
+
+    <footer>
+        <p>以下のファイルからAIが回答をしています：</p>
+        <ul class="file-list">
+            {% for file in files %}
+                <li><i class="far fa-file-pdf"></i> {{ file }}</li>
+            {% else %}
+                <li>読み込まれているファイルはありません。</li>
+            {% endfor %}
+        </ul>
+    </footer>
+
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
