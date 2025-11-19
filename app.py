@@ -18,7 +18,7 @@ genai.configure(api_key=GENAI_API_KEY)
 # サービスアカウントキーのパス（Renderではシークレットファイルとして保存します）
 SERVICE_ACCOUNT_FILE = '/etc/secrets/credentials.json'
 # ★ここにGoogleドライブのフォルダIDを貼り付けてください
-DRIVE_FOLDER_ID = 'あなたのGoogleドライブフォルダIDをここに貼る' 
+DRIVE_FOLDER_ID = '1fJ3Mbrcw-joAsX33aBu0z4oSQu7I0PhP' 
 
 # 推奨モデル (Gemini 2.0 Flash)
 model = genai.GenerativeModel('models/gemini-2.0-flash')
