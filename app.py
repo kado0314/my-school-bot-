@@ -26,6 +26,10 @@ SPREADSHEET_ID = '1NK0ixXY9hOWuMib22wZxmFX6apUV7EhTDawTXPganZg'
 # モデル設定 (Gemini 2.0 Flash)
 model = genai.GenerativeModel('models/gemini-2.0-flash')
 
+# グローバル変数として定義（更新機能で書き換えるため）
+SYSTEM_CONTEXT = ""
+LOADED_FILES = []
+
 def get_credentials():
     """認証情報を取得（ドライブとスプレッドシート両用）"""
     creds_path = SERVICE_ACCOUNT_FILE
@@ -53,7 +57,7 @@ def load_pdfs_from_drive():
     file_list_data = [] # 名前とURLを入れるリスト
 
     try:
-        # ★変更点: fieldsに 'webViewLink' (閲覧用URL) を追加しました
+        # webViewLink (閲覧用URL) も取得
         query = f"'{DRIVE_FOLDER_ID}' in parents and mimeType='application/pdf' and trashed=false"
         results = service.files().list(q=query, fields="files(id, name, webViewLink)").execute()
         items = results.get('files', [])
@@ -64,13 +68,13 @@ def load_pdfs_from_drive():
         for item in items:
             print(f"Loading: {item['name']}...")
             
-            # ★変更点: 名前だけでなくURLも一緒に保存する
+            # 名前とURLを保存
             file_list_data.append({
                 'name': item['name'],
-                'url': item.get('webViewLink', '#') # URLが取得できない場合は#にする
+                'url': item.get('webViewLink', '#') 
             })
 
-            # ここからはPDFの中身を読む処理（変更なし）
+            # PDFの中身を読む処理
             request = service.files().get_media(fileId=item['id'])
             file_stream = io.BytesIO()
             downloader = MediaIoBaseDownload(file_stream, request)
@@ -112,14 +116,41 @@ def save_log_to_sheet(user_msg, bot_msg):
     except Exception as e:
         print(f"Logging Error: {e}")
 
-# 起動時に一度だけDriveからデータを読み込む
+# --- 起動時の処理 ---
 print("Starting to load PDFs from Drive...")
 SYSTEM_CONTEXT, LOADED_FILES = load_pdfs_from_drive()
 print("Loading complete.")
 
+
+# --- ルーティング ---
+
 @app.route('/')
 def index():
     return render_template('index.html', files=LOADED_FILES)
+
+@app.route('/refresh')
+def refresh_data():
+    """
+    【追加機能】このURLにアクセスすると、強制的にGoogleドライブを読み直します
+    """
+    global SYSTEM_CONTEXT, LOADED_FILES
+    
+    print("Reloading data from Drive...")
+    new_context, new_files = load_pdfs_from_drive()
+    
+    if new_files:
+        SYSTEM_CONTEXT = new_context
+        LOADED_FILES = new_files
+        return jsonify({
+            'status': 'success', 
+            'message': '知識データを更新しました！', 
+            'files': new_files
+        })
+    else:
+        return jsonify({
+            'status': 'error', 
+            'message': '更新に失敗しました。PDFが見つからないかエラーが発生しました。'
+        })
 
 @app.route('/chat', methods=['POST'])
 def chat():
@@ -130,6 +161,7 @@ def chat():
     if not user_message:
         return jsonify({'error': 'No message provided'}), 400
 
+    # 履歴をテキスト化
     history_text = ""
     for chat in history_list[-6:]:
         role = "ユーザー" if chat['role'] == 'user' else "AI"
@@ -142,7 +174,7 @@ def chat():
     【重要ルール】
     1. 以下の[参照資料]に書かれている内容**のみ**を根拠として回答してください。 
     2. [これまでの会話]の流れを考慮して回答してください（文脈を理解してください）。 
-    3. あなた自身の知識や推測、一般論を混ぜるときはわかりやい形で、知識、推論であることを示してからと答えてください。 
+    3. あなた自身の知識や推測、一般論を混ぜるときはわかりやい形で、知識、推論と答えてください。 
     4. 資料に答えが見つからない場合は、「申し訳ありません、資料にはその情報がありません」と答えてください。 
     5. 参照して答えた資料の名前とページ数も出力してください。
 
