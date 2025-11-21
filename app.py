@@ -163,7 +163,7 @@ def chat():
 
     # 履歴をテキスト化
     history_text = ""
-    for chat in history_list[-6:]:
+    for chat in history_list[-2:]:
         role = "ユーザー" if chat['role'] == 'user' else "AI"
         content = chat['text']
         history_text += f"{role}: {content}\n"
