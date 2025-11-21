@@ -149,6 +149,30 @@ def chat():
     except Exception as e:
         print(f"Chat Error: {e}")
         return jsonify({'reply': 'エラーが発生しました。'}), 500
-
+@app.route('/refresh')
+def refresh_data():
+    """
+    このURLにアクセスすると、強制的にGoogleドライブを読み直します
+    """
+    global SYSTEM_CONTEXT, LOADED_FILES  # グローバル変数を書き換える宣言
+    
+    print("Reloading data from Drive...")
+    # データを再取得
+    new_context, new_files = load_pdfs_from_drive()
+    
+    # 読み込みに成功した場合のみ更新
+    if new_files:
+        SYSTEM_CONTEXT = new_context
+        LOADED_FILES = new_files
+        return jsonify({
+            'status': 'success', 
+            'message': '知識データを更新しました！', 
+            'files': new_files
+        })
+    else:
+        return jsonify({
+            'status': 'error', 
+            'message': '更新に失敗しました。PDFが見つからないかエラーが発生しました。'
+        })
 if __name__ == '__main__':
     app.run(debug=True)
