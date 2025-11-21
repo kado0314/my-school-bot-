@@ -1,170 +1,393 @@
-import os
-import io
-import datetime
-from flask import Flask, render_template, request, jsonify
-import google.generativeai as genai
-from PyPDF2 import PdfReader
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseDownload
-import gspread
-
-app = Flask(__name__)
-
-# --- 設定エリア ---
-GENAI_API_KEY = os.environ.get("GEMINI_API_KEY")
-genai.configure(api_key=GENAI_API_KEY)
-
-SERVICE_ACCOUNT_FILE = '/etc/secrets/credentials.json'
-
-# ★ここにGoogleドライブのフォルダIDを貼り付けてください
-DRIVE_FOLDER_ID = '1fJ3Mbrcw-joAsX33aBu0z4oSQu7I0PhP' 
-
-# ★ここにスプレッドシートIDを貼り付けてください
-SPREADSHEET_ID = 'あなたのスプレッドシートIDをここに貼る'
-
-# モデル設定 (Gemini 2.0 Flash)
-model = genai.GenerativeModel('models/gemini-2.0-flash')
-
-def get_credentials():
-    """認証情報を取得（ドライブとスプレッドシート両用）"""
-    creds_path = SERVICE_ACCOUNT_FILE
-    if not os.path.exists(creds_path):
-        creds_path = 'credentials.json' # ローカル開発用
-        
-    if not os.path.exists(creds_path):
-        print("Warning: credentials.json not found.")
-        return None
-
-    scopes = [
-        'https://www.googleapis.com/auth/drive.readonly',
-        'https://www.googleapis.com/auth/spreadsheets' 
-    ]
-    return service_account.Credentials.from_service_account_file(creds_path, scopes=scopes)
-
-def load_pdfs_from_drive():
-    """Google DriveからPDFを読み込む"""
-    creds = get_credentials()
-    if not creds:
-        return "認証エラー", []
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>School AI Bot - Buttermax Style</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;800&display=swap" rel="stylesheet">
     
-    service = build('drive', 'v3', credentials=creds)
-    text_content = ""
-    file_names = []
+    <style>
+        /* --- Buttermax Design --- */
+        :root {
+            --bg-color: #f3f3f3;
+            --accent-color: #fff700; /* Buttermax Yellow */
+            --text-color: #000000;
+            --border-width: 3px;
+            --shadow-offset: 6px;
+            --dot-color: #000;
+        }
 
-    try:
-        query = f"'{DRIVE_FOLDER_ID}' in parents and mimeType='application/pdf' and trashed=false"
-        results = service.files().list(q=query, fields="files(id, name)").execute()
-        items = results.get('files', [])
+        body.dark-mode {
+            --bg-color: #0a0a0a;
+            --text-color: #ffffff;
+            --accent-color: #fff700;
+            --dot-color: #333;
+        }
 
-        if not items:
-            return "フォルダ内にPDFファイルが見つかりませんでした。", []
+        * { box-sizing: border-box; margin: 0; padding: 0; }
 
-        for item in items:
-            print(f"Loading: {item['name']}...")
-            file_names.append(item['name'])
-            request = service.files().get_media(fileId=item['id'])
-            file_stream = io.BytesIO()
-            downloader = MediaIoBaseDownload(file_stream, request)
-            done = False
-            while done is False:
-                _, done = downloader.next_chunk()
+        body {
+            font-family: 'JetBrains Mono', monospace;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            line-height: 1.5;
+            display: flex; flex-direction: column; height: 100vh; overflow: hidden;
+            background-image: radial-gradient(var(--dot-color) 1px, transparent 1px);
+            background-size: 20px 20px;
+            transition: background-color 0.3s, color 0.3s;
+        }
 
-            file_stream.seek(0)
-            reader = PdfReader(file_stream)
-            text_content += f"\n--- File: {item['name']} ---\n"
-            for page in reader.pages:
-                extracted = page.extract_text()
-                if extracted:
-                    text_content += extracted + "\n"
+        .cursor-trail {
+            position: fixed; width: 12px; height: 12px;
+            background-color: var(--text-color);
+            pointer-events: none; z-index: 9990;
+            animation: fadeOut 0.6s forwards;
+        }
+        body.dark-mode .cursor-trail { background-color: var(--accent-color); }
 
-    except Exception as e:
-        print(f"Drive Error: {e}")
-        return f"エラーが発生しました: {e}", []
+        @keyframes fadeOut {
+            0% { opacity: 0.6; transform: translate(-50%, -50%) scale(1) rotate(0deg); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(0) rotate(90deg); }
+        }
 
-    return text_content, file_names
+        header {
+            background-color: var(--bg-color);
+            border-bottom: var(--border-width) solid var(--text-color);
+            padding: 1.5rem 1rem;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            position: relative; z-index: 10;
+            box-shadow: 0 4px 0 rgba(0,0,0,0.1);
+            transition: background-color 0.3s, border-color 0.3s;
+        }
+        body.dark-mode header { background-color: #000; box-shadow: 0 4px 0 rgba(255,255,255,0.1); }
 
-def save_log_to_sheet(user_msg, bot_msg):
-    """スプレッドシートにログを保存する"""
-    try:
-        creds = get_credentials()
-        if not creds:
-            return
+        .back-button-container {
+            position: absolute; left: 1rem; top: 50%; transform: translateY(-50%);
+        }
 
-        client = gspread.authorize(creds)
-        sheet = client.open_by_key(SPREADSHEET_ID).sheet1
-        now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        .back-button {
+            text-decoration: none; color: #000; font-weight: 800;
+            border: var(--border-width) solid var(--text-color);
+            padding: 0.5rem 1rem; background: #fff;
+            transition: all 0.2s; display: inline-flex; align-items: center; gap: 0.5rem;
+            box-shadow: 4px 4px 0 var(--text-color); font-size: 0.9rem;
+        }
+        body.dark-mode .back-button {
+            border-color: #fff; box-shadow: 4px 4px 0 #fff;
+            background-color: var(--accent-color); color: #000;
+        }
+        .back-button:hover {
+            transform: translate(2px, 2px); box-shadow: 2px 2px 0 var(--text-color);
+            background-color: var(--accent-color);
+        }
+        body.dark-mode .back-button:hover {
+            box-shadow: 2px 2px 0 #fff; background-color: #fff; color: #000;
+        }
+
+        h1 {
+            font-size: 3.5rem; font-weight: 800; text-transform: uppercase;
+            letter-spacing: -2px; line-height: 1;
+            background-color: var(--accent-color); color: #000;
+            padding: 1rem 2rem; border: var(--border-width) solid var(--text-color);
+            transform: perspective(1000px) rotateX(0deg) rotateY(0deg) skew(-5deg);
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            user-select: none; box-shadow: 8px 8px 0 rgba(0,0,0,0.2);
+            display: inline-block; margin: 0 auto; cursor: pointer;
+        }
+        h1:hover {
+            background-color: #000; color: #fff; border-color: #000;
+            transform: perspective(1000px) rotateX(10deg) rotateY(-5deg) scale(1.05) skew(-5deg) translateY(-5px);
+            box-shadow: 15px 20px 0 rgba(255, 247, 0, 0.8);
+        }
+        body.dark-mode h1 { border-color: #fff; box-shadow: 8px 8px 0 rgba(255,255,255,0.2); }
+        body.dark-mode h1:hover {
+            border-color: var(--accent-color); background-color: #fff; color: #000;
+            box-shadow: 15px 20px 0 var(--accent-color);
+        }
+
+        #chat-container {
+            flex: 1; overflow-y: auto; padding: 2rem;
+            display: flex; flex-direction: column; gap: 1.5rem;
+            scroll-behavior: smooth; background-color: rgba(255, 255, 255, 0.9);
+            transition: background-color 0.3s;
+        }
+        body.dark-mode #chat-container { background-color: rgba(20, 20, 20, 0.95); }
+
+        .chat-message { display: flex; align-items: flex-start; max-width: 85%; animation: fadeIn 0.3s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        .bot-message { align-self: flex-start; }
+        .user-message { align-self: flex-end; flex-direction: row-reverse; }
+
+        /* アイコン設定：Botは画像、ユーザーは画像なし */
+        .bot-icon {
+            width: 50px; height: 50px;
+            border: var(--border-width) solid var(--text-color);
+            background: var(--accent-color);
+            margin-right: 15px;
+            object-fit: cover;
+            border-radius: 50%;
+            transition: border-color 0.3s;
+        }
         
-        # エラーが出ても止まらないように安全に書き込む
-        try:
-            sheet.append_row([now, user_msg, bot_msg])
-            print("Log saved to sheet.")
-        except Exception as sheet_error:
-            print(f"Sheet Append Error: {sheet_error}")
+        /* ユーザーメッセージの調整（アイコンなし） */
+        .user-message .message-content {
+            background: #000; color: #fff; 
+            box-shadow: -6px 6px 0 rgba(255,247,0,0.5);
+            margin-right: 0;
+        }
 
-    except Exception as e:
-        print(f"Logging Error: {e}")
+        .message-content {
+            background: #fff; border: var(--border-width) solid var(--text-color);
+            padding: 1rem; position: relative;
+            box-shadow: var(--shadow-offset) var(--shadow-offset) 0 rgba(0,0,0,0.2);
+            font-size: 0.95rem; word-wrap: break-word;
+            transition: background-color 0.3s, border-color 0.3s, color 0.3s;
+        }
 
-# 起動時に一度だけDriveからデータを読み込む
-print("Starting to load PDFs from Drive...")
-SYSTEM_CONTEXT, LOADED_FILES = load_pdfs_from_drive()
-print("Loading complete.")
+        body.dark-mode .bot-message .message-content {
+            background: #000; color: #fff; border-color: #fff;
+            box-shadow: 6px 6px 0 rgba(255,255,255,0.2);
+        }
+        body.dark-mode .user-message .message-content {
+            background: var(--accent-color); color: #000; border-color: #fff;
+            box-shadow: -6px 6px 0 rgba(255,255,255,0.5);
+        }
 
-@app.route('/')
-def index():
-    return render_template('index.html', files=LOADED_FILES)
+        .input-area {
+            background: var(--accent-color); border-top: var(--border-width) solid var(--text-color);
+            padding: 1.5rem; display: flex; gap: 1rem; align-items: stretch;
+            position: relative; z-index: 20; transition: background-color 0.3s, border-color 0.3s;
+        }
+        body.dark-mode .input-area { background: #333; border-top-color: #fff; }
 
-@app.route('/chat', methods=['POST'])
-def chat():
-    data = request.json
-    user_message = data.get('message')
-    # ★ここが追加機能：フロントエンドから会話履歴を受け取る
-    history_list = data.get('history', [])
-    
-    if not user_message:
-        return jsonify({'error': 'No message provided'}), 400
+        #user-input {
+            flex: 1; padding: 1rem; font-family: 'JetBrains Mono', monospace;
+            font-size: 1rem; border: var(--border-width) solid var(--text-color);
+            outline: none; box-shadow: inset 4px 4px 0 rgba(0,0,0,0.1);
+        }
+        body.dark-mode #user-input {
+            background: #000; color: #fff; border-color: #fff;
+            box-shadow: inset 4px 4px 0 rgba(255,255,255,0.1);
+        }
+        #user-input:focus { background-color: #fff; }
+        body.dark-mode #user-input:focus { background-color: #222; }
 
-    # ★履歴リストをテキスト形式に変換してプロンプトに組み込む
-    history_text = ""
-    # エラー防止のため、直近6回（3往復）分だけ採用する
-    for chat in history_list[-6:]:
-        role = "ユーザー" if chat['role'] == 'user' else "AI"
-        content = chat['text']
-        history_text += f"{role}: {content}\n"
+        .input-area button {
+            padding: 0 2rem; font-family: 'JetBrains Mono', monospace;
+            font-weight: 800; font-size: 1rem;
+            background: var(--text-color); color: #fff;
+            border: var(--border-width) solid var(--text-color);
+            cursor: pointer; transition: all 0.1s; text-transform: uppercase;
+            box-shadow: 4px 4px 0 #fff;
+        }
+        body.dark-mode .input-area button {
+            background: var(--accent-color); color: #000;
+            border-color: #fff; box-shadow: 4px 4px 0 #fff;
+        }
+        .input-area button:hover {
+            background: #fff; color: var(--text-color); transform: translate(2px, 2px);
+            box-shadow: 2px 2px 0 var(--text-color);
+        }
+        body.dark-mode .input-area button:hover {
+            background: #fff; color: #000; box-shadow: 2px 2px 0 #000; border-color: #000;
+        }
 
-    prompt = f"""
-    あなたは厳格な事実確認を行う学校の質問応答システムです。
-    
-    【重要ルール】
-    1. 以下の[参照資料]に書かれている内容**のみ**を根拠として回答してください。
-    2. [これまでの会話]の流れを考慮して回答してください（文脈を理解してください）。
-    3. あなた自身の知識や推測、一般論を混ぜることは**厳禁**です。
-    4. 資料に答えが見つからない場合は、「申し訳ありません、資料にはその情報がありません」と答えてください。
-
-    [参照資料]
-    {SYSTEM_CONTEXT}
-
-    [これまでの会話]
-    {history_text}
-
-    [今回のユーザーの質問]
-    {user_message}
-    """
-
-    try:
-        response = model.generate_content(prompt)
-        bot_reply = response.text
+        footer {
+            background: var(--text-color); color: #fff;
+            padding: 0.5rem 1rem; font-size: 0.8rem;
+            border-top: 1px solid #fff; text-align: center;
+            transition: background-color 0.3s;
+        }
+        body.dark-mode footer { background: #000; border-top-color: #333; }
         
-        # ログ保存
-        save_log_to_sheet(user_message, bot_reply)
-        
-        return jsonify({'reply': bot_reply})
-    except Exception as e:
-        print(f"Gemini Error: {e}")
-        # 429エラーなどの対策
-        if "429" in str(e):
-            return jsonify({'reply': '申し訳ありません。現在アクセスが集中しており、一時的に利用できません。少し待ってから再度お試しください。'})
-        return jsonify({'reply': 'エラーが発生しました。'}), 500
+        .file-list-container {
+            display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; margin-top: 5px;
+        }
+        .file-badge {
+            background: #333; color: var(--accent-color); padding: 2px 8px;
+            border: 1px solid var(--accent-color); border-radius: 4px; font-size: 0.7rem;
+        }
 
-if __name__ == '__main__':
-    app.run(debug=True)
+        @media (max-width: 768px) {
+            h1 { font-size: 1.8rem; padding: 0.5rem 1rem; }
+            .back-button-container { position: static; transform: none; margin-bottom: 1rem; align-self: flex-start; }
+            header { padding: 1rem; align-items: center; }
+            .input-area { padding: 1rem; flex-direction: column; }
+            .chat-message { max-width: 100%; }
+            .cursor-trail { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="back-button-container">
+            <a href="https://www.bit.urayama.ac.jp/" class="back-button">
+                <i class="fas fa-arrow-left"></i> TOP
+            </a>
+        </div>
+        <h1 id="mode-toggle" title="Click to toggle Dark Mode">School AI Bot</h1>
+    </header>
+
+    <main id="chat-container">
+        <div class="chat-message bot-message">
+            <img src="{{ url_for('static', filename='bitboticon.png') }}" onerror="this.style.display='none'" alt="Bot Icon" class="bot-icon">
+            
+            <div class="message-content">
+                こんにちは！Googleドライブの資料に基づいてお答えします。何でも聞いてください。<br>
+                <strong>[SYSTEM READY]</strong>
+            </div>
+        </div>
+    </main>
+
+    <div class="input-area">
+        <input type="text" id="user-input" placeholder="質問を入力してください..." onkeypress="handleKeyPress(event)">
+        <button onclick="sendMessage()">送信</button>
+    </div>
+
+    <footer>
+        <p>参照ファイル (AI LOADING SOURCE):</p>
+        <div class="file-list-container">
+            {% for file in files %}
+                <span class="file-badge"><i class="far fa-file-pdf"></i> {{ file }}</span>
+            {% else %}
+                <span>NO DATA LOADED</span>
+            {% endfor %}
+        </div>
+    </footer>
+
+    <script>
+        // --- Dark Mode Toggle ---
+        const modeToggle = document.getElementById('mode-toggle');
+        modeToggle.addEventListener('click', () => {
+            document.body.classList.toggle('dark-mode');
+        });
+
+        // --- Cursor Trail ---
+        let lastTrailTime = 0;
+        document.addEventListener('mousemove', (e) => {
+            createTrail(e.clientX, e.clientY);
+        });
+
+        function createTrail(x, y) {
+            const now = Date.now();
+            if (now - lastTrailTime < 25) return;
+            lastTrailTime = now;
+            const trail = document.createElement('div');
+            trail.className = 'cursor-trail';
+            trail.style.left = x + 'px';
+            trail.style.top = y + 'px';
+            const offsetX = Math.random() * 10 - 5;
+            const offsetY = Math.random() * 10 - 5;
+            trail.style.marginLeft = offsetX + 'px';
+            trail.style.marginTop = offsetY + 'px';
+            document.body.appendChild(trail);
+            setTimeout(() => { trail.remove(); }, 600);
+        }
+
+        // --- Chat Bot Logic (Memory Enabled) ---
+        const chatContainer = document.getElementById('chat-container');
+        const userInput = document.getElementById('user-input');
+        
+        // ★ここが記憶装置（リロードでリセットされます）
+        let conversationHistory = [];
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        async function sendMessage() {
+            const text = userInput.value.trim();
+            if (text === '') return;
+
+            // 画面に表示
+            addMessage(text, 'user');
+            userInput.value = '';
+
+            // ローディング表示
+            const loadingId = addLoadingIndicator();
+
+            try {
+                // サーバーへ送信（履歴データも含める）
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ 
+                        message: text,
+                        history: conversationHistory 
+                    }),
+                });
+
+                const data = await response.json();
+                
+                removeLoadingIndicator(loadingId);
+
+                if (data.reply) {
+                    addMessage(data.reply, 'bot');
+                    
+                    // 会話履歴を更新（次回の送信のために保存）
+                    conversationHistory.push({role: 'user', text: text});
+                    conversationHistory.push({role: 'bot', text: data.reply});
+                } else {
+                    addMessage('エラーが発生しました。', 'bot');
+                }
+
+            } catch (error) {
+                removeLoadingIndicator(loadingId);
+                addMessage('サーバー通信エラーが発生しました。', 'bot');
+                console.error('Error:', error);
+            }
+        }
+
+        function addMessage(text, sender) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `chat-message ${sender}-message`;
+
+            let iconHtml = '';
+            if (sender === 'bot') {
+                iconHtml = `<img src="{{ url_for('static', filename='bitboticon.png') }}" class="bot-icon" onerror="this.style.display='none'">`;
+            }
+
+            const safeText = text.replace(/\n/g, '<br>');
+
+            messageDiv.innerHTML = `
+                ${sender === 'bot' ? iconHtml : ''}
+                <div class="message-content">${safeText}</div>
+            `;
+
+            chatContainer.appendChild(messageDiv);
+            scrollToBottom();
+        }
+
+        function addLoadingIndicator() {
+            const id = 'loading-' + Date.now();
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'chat-message bot-message';
+            messageDiv.id = id;
+            messageDiv.innerHTML = `
+                <img src="{{ url_for('static', filename='bitboticon.png') }}" class="bot-icon">
+                <div class="message-content" style="font-style:italic; color:#666;">
+                    <i class="fas fa-circle-notch fa-spin"></i> 検索中...
+                </div>
+            `;
+            chatContainer.appendChild(messageDiv);
+            scrollToBottom();
+            return id;
+        }
+
+        function removeLoadingIndicator(id) {
+            const element = document.getElementById(id);
+            if (element) { element.remove(); }
+        }
+
+        function scrollToBottom() {
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+    </script>
+</body>
+</html>
