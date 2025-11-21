@@ -23,7 +23,7 @@ DRIVE_FOLDER_ID = '1fJ3Mbrcw-joAsX33aBu0z4oSQu7I0PhP'
 # ★【重要】ここにステップ1でメモしたスプレッドシートIDを入れてください
 SPREADSHEET_ID = '1NK0ixXY9hOWuMib22wZxmFX6apUV7EhTDawTXPganZg'
 
-model = genai.GenerativeModel('gemini-1.5-flash')
+model = genai.GenerativeModel('models/gemini-2.0-flash')
 
 def get_credentials():
     """認証情報を取得（ドライブとスプレッドシート両用）"""
