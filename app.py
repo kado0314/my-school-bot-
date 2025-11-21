@@ -30,7 +30,7 @@ def get_credentials():
     """認証情報を取得（ドライブとスプレッドシート両用）"""
     creds_path = SERVICE_ACCOUNT_FILE
     if not os.path.exists(creds_path):
-        creds_path = 'credentials.json' # ローカル開発用
+        creds_path = 'credentials.json'
         
     if not os.path.exists(creds_path):
         print("Warning: credentials.json not found.")
@@ -50,11 +50,12 @@ def load_pdfs_from_drive():
     
     service = build('drive', 'v3', credentials=creds)
     text_content = ""
-    file_names = []
+    file_list_data = [] # 名前とURLを入れるリスト
 
     try:
+        # ★変更点: fieldsに 'webViewLink' (閲覧用URL) を追加しました
         query = f"'{DRIVE_FOLDER_ID}' in parents and mimeType='application/pdf' and trashed=false"
-        results = service.files().list(q=query, fields="files(id, name)").execute()
+        results = service.files().list(q=query, fields="files(id, name, webViewLink)").execute()
         items = results.get('files', [])
 
         if not items:
@@ -62,7 +63,14 @@ def load_pdfs_from_drive():
 
         for item in items:
             print(f"Loading: {item['name']}...")
-            file_names.append(item['name'])
+            
+            # ★変更点: 名前だけでなくURLも一緒に保存する
+            file_list_data.append({
+                'name': item['name'],
+                'url': item.get('webViewLink', '#') # URLが取得できない場合は#にする
+            })
+
+            # ここからはPDFの中身を読む処理（変更なし）
             request = service.files().get_media(fileId=item['id'])
             file_stream = io.BytesIO()
             downloader = MediaIoBaseDownload(file_stream, request)
@@ -82,7 +90,7 @@ def load_pdfs_from_drive():
         print(f"Drive Error: {e}")
         return f"エラーが発生しました: {e}", []
 
-    return text_content, file_names
+    return text_content, file_list_data
 
 def save_log_to_sheet(user_msg, bot_msg):
     """スプレッドシートにログを保存する"""
@@ -95,7 +103,6 @@ def save_log_to_sheet(user_msg, bot_msg):
         sheet = client.open_by_key(SPREADSHEET_ID).sheet1
         now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         
-        # エラーが出ても止まらないように安全に書き込む
         try:
             sheet.append_row([now, user_msg, bot_msg])
             print("Log saved to sheet.")
@@ -118,15 +125,12 @@ def index():
 def chat():
     data = request.json
     user_message = data.get('message')
-    # ★ここが追加機能：フロントエンドから会話履歴を受け取る
     history_list = data.get('history', [])
     
     if not user_message:
         return jsonify({'error': 'No message provided'}), 400
 
-    # ★履歴リストをテキスト形式に変換してプロンプトに組み込む
     history_text = ""
-    # エラー防止のため、直近6回（3往復）分だけ採用する
     for chat in history_list[-6:]:
         role = "ユーザー" if chat['role'] == 'user' else "AI"
         content = chat['text']
@@ -136,11 +140,11 @@ def chat():
     あなたは厳格な事実確認を行う学校の質問応答システムです。
     
     【重要ルール】
-    1. 以下の[参照資料]に書かれている内容**のみ**を根拠として回答してください。
-    2. [これまでの会話]の流れを考慮して回答してください（文脈を理解してください）。
-    3. あなた自身の知識や推測、一般論を混ぜるときはわかりやい形で、知識、推論と答えてください。
-    4. 資料に答えが見つからない場合は、「申し訳ありません、資料にはその情報がありません」と答えてください。
-    5.参照して答えた資料の名前とページ数も出力してください。
+    1. 以下の[参照資料]に書かれている内容**のみ**を根拠として回答してください。 
+    2. [これまでの会話]の流れを考慮して回答してください（文脈を理解してください）。 
+    3. あなた自身の知識や推測、一般論を混ぜるときはわかりやい形で、知識、推論であることを示してからと答えてください。 
+    4. 資料に答えが見つからない場合は、「申し訳ありません、資料にはその情報がありません」と答えてください。 
+    5. 参照して答えた資料の名前とページ数も出力してください。
 
     [参照資料]
     {SYSTEM_CONTEXT}
@@ -156,13 +160,11 @@ def chat():
         response = model.generate_content(prompt)
         bot_reply = response.text
         
-        # ログ保存
         save_log_to_sheet(user_message, bot_reply)
         
         return jsonify({'reply': bot_reply})
     except Exception as e:
         print(f"Gemini Error: {e}")
-        # 429エラーなどの対策
         if "429" in str(e):
             return jsonify({'reply': '申し訳ありません。現在アクセスが集中しており、一時的に利用できません。少し待ってから再度お試しください。'})
         return jsonify({'reply': 'エラーが発生しました。'}), 500
