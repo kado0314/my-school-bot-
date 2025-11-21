@@ -7,35 +7,35 @@ from PyPDF2 import PdfReader
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
-import gspread # ★追加
+import gspread
 
 app = Flask(__name__)
 
-# --- 設定 ---
+# --- 設定エリア ---
 GENAI_API_KEY = os.environ.get("GEMINI_API_KEY")
 genai.configure(api_key=GENAI_API_KEY)
 
 SERVICE_ACCOUNT_FILE = '/etc/secrets/credentials.json'
 
-# ★あなたのGoogleドライブのフォルダID
+# ★ここにGoogleドライブのフォルダIDを貼り付けてください
 DRIVE_FOLDER_ID = '1fJ3Mbrcw-joAsX33aBu0z4oSQu7I0PhP' 
 
-# ★【重要】ここにステップ1でメモしたスプレッドシートIDを入れてください
+# ★ここにスプレッドシートIDを貼り付けてください
 SPREADSHEET_ID = '1NK0ixXY9hOWuMib22wZxmFX6apUV7EhTDawTXPganZg'
 
+# モデル設定 (Gemini 2.0 Flash)
 model = genai.GenerativeModel('models/gemini-2.0-flash')
 
 def get_credentials():
     """認証情報を取得（ドライブとスプレッドシート両用）"""
     creds_path = SERVICE_ACCOUNT_FILE
     if not os.path.exists(creds_path):
-        creds_path = 'credentials.json' # ローカル用
+        creds_path = 'credentials.json' # ローカル開発用
         
     if not os.path.exists(creds_path):
         print("Warning: credentials.json not found.")
         return None
 
-    # 権限の範囲にSpreadsheetsを追加
     scopes = [
         'https://www.googleapis.com/auth/drive.readonly',
         'https://www.googleapis.com/auth/spreadsheets' 
@@ -58,7 +58,7 @@ def load_pdfs_from_drive():
         items = results.get('files', [])
 
         if not items:
-            return "PDFなし", []
+            return "フォルダ内にPDFファイルが見つかりませんでした。", []
 
         for item in items:
             print(f"Loading: {item['name']}...")
@@ -80,7 +80,7 @@ def load_pdfs_from_drive():
 
     except Exception as e:
         print(f"Drive Error: {e}")
-        return f"Error: {e}", []
+        return f"エラーが発生しました: {e}", []
 
     return text_content, file_names
 
@@ -91,23 +91,22 @@ def save_log_to_sheet(user_msg, bot_msg):
         if not creds:
             return
 
-        # gspreadでスプレッドシートに接続
         client = gspread.authorize(creds)
-        sheet = client.open_by_key(SPREADSHEET_ID).sheet1 # 1枚目のシートを取得
-
-        # 現在時刻
+        sheet = client.open_by_key(SPREADSHEET_ID).sheet1
         now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
-        # 行を追加 [日時, ユーザーの質問, AIの回答]
-        sheet.append_row([now, user_msg, bot_msg])
-        print("Log saved to sheet.")
+        
+        # エラーが出ても止まらないように安全に書き込む
+        try:
+            sheet.append_row([now, user_msg, bot_msg])
+            print("Log saved to sheet.")
+        except Exception as sheet_error:
+            print(f"Sheet Append Error: {sheet_error}")
 
     except Exception as e:
-        # ログ保存に失敗してもチャットは止めない
         print(f"Logging Error: {e}")
 
-# 起動時に学習
-print("Starting to load PDFs...")
+# 起動時に一度だけDriveからデータを読み込む
+print("Starting to load PDFs from Drive...")
 SYSTEM_CONTEXT, LOADED_FILES = load_pdfs_from_drive()
 print("Loading complete.")
 
@@ -117,62 +116,56 @@ def index():
 
 @app.route('/chat', methods=['POST'])
 def chat():
-    user_message = request.json.get('message')
+    data = request.json
+    user_message = data.get('message')
+    # ★ここが追加機能：フロントエンドから会話履歴を受け取る
+    history_list = data.get('history', [])
+    
     if not user_message:
-        return jsonify({'error': 'No message'}), 400
+        return jsonify({'error': 'No message provided'}), 400
+
+    # ★履歴リストをテキスト形式に変換してプロンプトに組み込む
+    history_text = ""
+    # エラー防止のため、直近6回（3往復）分だけ採用する
+    for chat in history_list[-6:]:
+        role = "ユーザー" if chat['role'] == 'user' else "AI"
+        content = chat['text']
+        history_text += f"{role}: {content}\n"
 
     prompt = f"""
-    あなたは学校の質問応答ボットです。
-       
+    あなたは厳格な事実確認を行う学校の質問応答システムです。
+    
     【重要ルール】
     1. 以下の[参照資料]に書かれている内容**のみ**を根拠として回答してください。
-    2. あなた自身の知識や推測、一般論を混ぜることは**厳禁**です。
-    3. [参照資料]の中に答えが見つからない場合は、正直に「申し訳ありません、提供された資料の中にはその情報が含まれていません」とだけ答えてください。無理に答えを捏造しないでください。
-    4. 文体は丁寧な「です・ます」調で、簡潔に答えてください。
-    以下の資料に基づいて回答してください。
-    
-    [資料]
+    2. [これまでの会話]の流れを考慮して回答してください（文脈を理解してください）。
+    3. あなた自身の知識や推測、一般論を混ぜるときはわかりやい形で、知識、推論と答えてください。
+    4. 資料に答えが見つからない場合は、「申し訳ありません、資料にはその情報がありません」と答えてください。
+    5.参照して答えた資料の名前とページ数も出力してください。
+
+    [参照資料]
     {SYSTEM_CONTEXT}
 
-    [質問]
+    [これまでの会話]
+    {history_text}
+
+    [今回のユーザーの質問]
     {user_message}
     """
 
     try:
         response = model.generate_content(prompt)
         bot_reply = response.text
-
-        # ★ここでログ保存を実行（バックグラウンドでエラーになっても無視して回答を返す）
+        
+        # ログ保存
         save_log_to_sheet(user_message, bot_reply)
-
+        
         return jsonify({'reply': bot_reply})
     except Exception as e:
-        print(f"Chat Error: {e}")
+        print(f"Gemini Error: {e}")
+        # 429エラーなどの対策
+        if "429" in str(e):
+            return jsonify({'reply': '申し訳ありません。現在アクセスが集中しており、一時的に利用できません。少し待ってから再度お試しください。'})
         return jsonify({'reply': 'エラーが発生しました。'}), 500
-@app.route('/refresh')
-def refresh_data():
-    """
-    このURLにアクセスすると、強制的にGoogleドライブを読み直します
-    """
-    global SYSTEM_CONTEXT, LOADED_FILES  # グローバル変数を書き換える宣言
-    
-    print("Reloading data from Drive...")
-    # データを再取得
-    new_context, new_files = load_pdfs_from_drive()
-    
-    # 読み込みに成功した場合のみ更新
-    if new_files:
-        SYSTEM_CONTEXT = new_context
-        LOADED_FILES = new_files
-        return jsonify({
-            'status': 'success', 
-            'message': '知識データを更新しました！', 
-            'files': new_files
-        })
-    else:
-        return jsonify({
-            'status': 'error', 
-            'message': '更新に失敗しました。PDFが見つからないかエラーが発生しました。'
-        })
+
 if __name__ == '__main__':
     app.run(debug=True)
