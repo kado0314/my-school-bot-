@@ -120,7 +120,6 @@
         .bot-message { align-self: flex-start; }
         .user-message { align-self: flex-end; flex-direction: row-reverse; }
 
-        /* アイコン設定：Botは画像、ユーザーは画像なし */
         .bot-icon {
             width: 50px; height: 50px;
             border: var(--border-width) solid var(--text-color);
@@ -131,7 +130,6 @@
             transition: border-color 0.3s;
         }
         
-        /* ユーザーメッセージの調整（アイコンなし） */
         .user-message .message-content {
             background: #000; color: #fff; 
             box-shadow: -6px 6px 0 rgba(255,247,0,0.5);
@@ -205,9 +203,23 @@
         .file-list-container {
             display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; margin-top: 5px;
         }
+        
+        /* ★リンク用にスタイルを変更 */
         .file-badge {
             background: #333; color: var(--accent-color); padding: 2px 8px;
             border: 1px solid var(--accent-color); border-radius: 4px; font-size: 0.7rem;
+            text-decoration: none; /* 下線を消す */
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .file-badge:hover {
+            background: var(--accent-color);
+            color: #000;
+            transform: translateY(-2px);
         }
 
         @media (max-width: 768px) {
@@ -233,7 +245,6 @@
     <main id="chat-container">
         <div class="chat-message bot-message">
             <img src="{{ url_for('static', filename='bitboticon.png') }}" onerror="this.style.display='none'" alt="Bot Icon" class="bot-icon">
-            
             <div class="message-content">
                 こんにちは！Googleドライブの資料に基づいてお答えします。何でも聞いてください。<br>
                 <strong>[SYSTEM READY]</strong>
@@ -247,10 +258,12 @@
     </div>
 
     <footer>
-        <p>参照ファイル (AI LOADING SOURCE):</p>
+        <p>参照ファイル (CLICK TO OPEN PDF):</p>
         <div class="file-list-container">
             {% for file in files %}
-                <span class="file-badge"><i class="far fa-file-pdf"></i> {{ file }}</span>
+                <a href="{{ file.url }}" target="_blank" class="file-badge">
+                    <i class="far fa-file-pdf"></i> {{ file.name }}
+                </a>
             {% else %}
                 <span>NO DATA LOADED</span>
             {% endfor %}
@@ -258,13 +271,12 @@
     </footer>
 
     <script>
-        // --- Dark Mode Toggle ---
+        // JSは先ほどと同じ「記憶機能付き」のものです
         const modeToggle = document.getElementById('mode-toggle');
         modeToggle.addEventListener('click', () => {
             document.body.classList.toggle('dark-mode');
         });
 
-        // --- Cursor Trail ---
         let lastTrailTime = 0;
         document.addEventListener('mousemove', (e) => {
             createTrail(e.clientX, e.clientY);
@@ -286,11 +298,9 @@
             setTimeout(() => { trail.remove(); }, 600);
         }
 
-        // --- Chat Bot Logic (Memory Enabled) ---
         const chatContainer = document.getElementById('chat-container');
         const userInput = document.getElementById('user-input');
         
-        // ★ここが記憶装置（リロードでリセットされます）
         let conversationHistory = [];
 
         function handleKeyPress(event) {
@@ -303,34 +313,23 @@
             const text = userInput.value.trim();
             if (text === '') return;
 
-            // 画面に表示
             addMessage(text, 'user');
             userInput.value = '';
 
-            // ローディング表示
             const loadingId = addLoadingIndicator();
 
             try {
-                // サーバーへ送信（履歴データも含める）
                 const response = await fetch('/chat', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ 
-                        message: text,
-                        history: conversationHistory 
-                    }),
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message: text, history: conversationHistory }),
                 });
 
                 const data = await response.json();
-                
                 removeLoadingIndicator(loadingId);
 
                 if (data.reply) {
                     addMessage(data.reply, 'bot');
-                    
-                    // 会話履歴を更新（次回の送信のために保存）
                     conversationHistory.push({role: 'user', text: text});
                     conversationHistory.push({role: 'bot', text: data.reply});
                 } else {
@@ -340,26 +339,18 @@
             } catch (error) {
                 removeLoadingIndicator(loadingId);
                 addMessage('サーバー通信エラーが発生しました。', 'bot');
-                console.error('Error:', error);
             }
         }
 
         function addMessage(text, sender) {
             const messageDiv = document.createElement('div');
             messageDiv.className = `chat-message ${sender}-message`;
-
             let iconHtml = '';
             if (sender === 'bot') {
                 iconHtml = `<img src="{{ url_for('static', filename='bitboticon.png') }}" class="bot-icon" onerror="this.style.display='none'">`;
             }
-
             const safeText = text.replace(/\n/g, '<br>');
-
-            messageDiv.innerHTML = `
-                ${sender === 'bot' ? iconHtml : ''}
-                <div class="message-content">${safeText}</div>
-            `;
-
+            messageDiv.innerHTML = `${sender === 'bot' ? iconHtml : ''}<div class="message-content">${safeText}</div>`;
             chatContainer.appendChild(messageDiv);
             scrollToBottom();
         }
@@ -369,12 +360,7 @@
             const messageDiv = document.createElement('div');
             messageDiv.className = 'chat-message bot-message';
             messageDiv.id = id;
-            messageDiv.innerHTML = `
-                <img src="{{ url_for('static', filename='bitboticon.png') }}" class="bot-icon">
-                <div class="message-content" style="font-style:italic; color:#666;">
-                    <i class="fas fa-circle-notch fa-spin"></i> 検索中...
-                </div>
-            `;
+            messageDiv.innerHTML = `<img src="{{ url_for('static', filename='bitboticon.png') }}" class="bot-icon"><div class="message-content" style="font-style:italic; color:#666;"><i class="fas fa-circle-notch fa-spin"></i> 検索中...</div>`;
             chatContainer.appendChild(messageDiv);
             scrollToBottom();
             return id;
