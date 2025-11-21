@@ -21,7 +21,7 @@ SERVICE_ACCOUNT_FILE = '/etc/secrets/credentials.json'
 DRIVE_FOLDER_ID = '1fJ3Mbrcw-joAsX33aBu0z4oSQu7I0PhP' 
 
 # ★【重要】ここにステップ1でメモしたスプレッドシートIDを入れてください
-SPREADSHEET_ID = 'あなたのスプレッドシートIDをここに貼る'
+SPREADSHEET_ID = '1NK0ixXY9hOWuMib22wZxmFX6apUV7EhTDawTXPganZg'
 
 model = genai.GenerativeModel('gemini-1.5-flash')
 
