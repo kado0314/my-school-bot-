@@ -2,13 +2,13 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>School AI Bot - Buttermax Style</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;800&display=swap" rel="stylesheet">
     
     <style>
-        /* --- Buttermax Design --- */
+        /* --- Buttermax Design Variables --- */
         :root {
             --bg-color: #f3f3f3;
             --accent-color: #fff700; /* Buttermax Yellow */
@@ -16,6 +16,9 @@
             --border-width: 3px;
             --shadow-offset: 6px;
             --dot-color: #000;
+            /* スマホ用調整変数 */
+            --header-height: 80px;
+            --footer-height: auto;
         }
 
         body.dark-mode {
@@ -32,12 +35,18 @@
             background-color: var(--bg-color);
             color: var(--text-color);
             line-height: 1.5;
-            display: flex; flex-direction: column; height: 100vh; overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            /* スマホのアドレスバー対策でdvhを使用 */
+            height: 100vh; 
+            height: 100dvh; 
+            overflow: hidden;
             background-image: radial-gradient(var(--dot-color) 1px, transparent 1px);
             background-size: 20px 20px;
             transition: background-color 0.3s, color 0.3s;
         }
 
+        /* --- PC用カーソルエフェクト (スマホでは非表示) --- */
         .cursor-trail {
             position: fixed; width: 12px; height: 12px;
             background-color: var(--text-color);
@@ -51,14 +60,19 @@
             100% { opacity: 0; transform: translate(-50%, -50%) scale(0) rotate(90deg); }
         }
 
+        /* --- Header --- */
         header {
             background-color: var(--bg-color);
             border-bottom: var(--border-width) solid var(--text-color);
-            padding: 1.5rem 1rem;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            position: relative; z-index: 10;
+            padding: 0.8rem 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            z-index: 10;
             box-shadow: 0 4px 0 rgba(0,0,0,0.1);
             transition: background-color 0.3s, border-color 0.3s;
+            flex-shrink: 0; /* 縮まないようにする */
         }
         body.dark-mode header { background-color: #000; box-shadow: 0 4px 0 rgba(255,255,255,0.1); }
 
@@ -69,62 +83,65 @@
         .back-button {
             text-decoration: none; color: #000; font-weight: 800;
             border: var(--border-width) solid var(--text-color);
-            padding: 0.5rem 1rem; background: #fff;
+            padding: 0.4rem 0.8rem; background: #fff;
             transition: all 0.2s; display: inline-flex; align-items: center; gap: 0.5rem;
-            box-shadow: 4px 4px 0 var(--text-color); font-size: 0.9rem;
+            box-shadow: 3px 3px 0 var(--text-color); font-size: 0.8rem;
+            white-space: nowrap;
         }
         body.dark-mode .back-button {
-            border-color: #fff; box-shadow: 4px 4px 0 #fff;
+            border-color: #fff; box-shadow: 3px 3px 0 #fff;
             background-color: var(--accent-color); color: #000;
         }
-        .back-button:hover {
-            transform: translate(2px, 2px); box-shadow: 2px 2px 0 var(--text-color);
-            background-color: var(--accent-color);
-        }
-        body.dark-mode .back-button:hover {
-            box-shadow: 2px 2px 0 #fff; background-color: #fff; color: #000;
+        .back-button:active {
+            transform: translate(2px, 2px) translateY(-50%);
+            box-shadow: none;
         }
 
         h1 {
-            font-size: 3.5rem; font-weight: 800; text-transform: uppercase;
-            letter-spacing: -2px; line-height: 1;
+            font-size: 2rem; font-weight: 800; text-transform: uppercase;
+            letter-spacing: -1px; line-height: 1;
             background-color: var(--accent-color); color: #000;
-            padding: 1rem 2rem; border: var(--border-width) solid var(--text-color);
-            transform: perspective(1000px) rotateX(0deg) rotateY(0deg) skew(-5deg);
-            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            user-select: none; box-shadow: 8px 8px 0 rgba(0,0,0,0.2);
+            padding: 0.5rem 1rem; border: var(--border-width) solid var(--text-color);
+            transform: skew(-5deg);
+            user-select: none; box-shadow: 4px 4px 0 rgba(0,0,0,0.2);
             display: inline-block; margin: 0 auto; cursor: pointer;
+            text-align: center;
+            max-width: 60%; /* スマホではみ出さないように */
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
-        h1:hover {
-            background-color: #000; color: #fff; border-color: #000;
-            transform: perspective(1000px) rotateX(10deg) rotateY(-5deg) scale(1.05) skew(-5deg) translateY(-5px);
-            box-shadow: 15px 20px 0 rgba(255, 247, 0, 0.8);
-        }
-        body.dark-mode h1 { border-color: #fff; box-shadow: 8px 8px 0 rgba(255,255,255,0.2); }
-        body.dark-mode h1:hover {
-            border-color: var(--accent-color); background-color: #fff; color: #000;
-            box-shadow: 15px 20px 0 var(--accent-color);
-        }
+        body.dark-mode h1 { border-color: #fff; box-shadow: 4px 4px 0 rgba(255,255,255,0.2); }
 
+        /* --- Chat Container --- */
         #chat-container {
-            flex: 1; overflow-y: auto; padding: 2rem;
-            display: flex; flex-direction: column; gap: 1.5rem;
+            flex: 1; /* 残りの高さを全て使う */
+            overflow-y: auto; 
+            padding: 1rem;
+            display: flex; flex-direction: column; gap: 1rem;
             scroll-behavior: smooth; background-color: rgba(255, 255, 255, 0.9);
             transition: background-color 0.3s;
+            -webkit-overflow-scrolling: touch; /* スマホでのスクロールを滑らかに */
         }
         body.dark-mode #chat-container { background-color: rgba(20, 20, 20, 0.95); }
 
-        .chat-message { display: flex; align-items: flex-start; max-width: 85%; animation: fadeIn 0.3s ease-out; }
+        .chat-message { 
+            display: flex; align-items: flex-start; 
+            max-width: 90%; /* スマホ用に幅を広げる */
+            animation: fadeIn 0.3s ease-out; 
+        }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
         .bot-message { align-self: flex-start; }
         .user-message { align-self: flex-end; flex-direction: row-reverse; }
 
+        /* アイコン */
         .bot-icon {
-            width: 50px; height: 50px;
+            width: 40px; height: 40px; /* スマホ用に少し小さく */
+            min-width: 40px; /* 潰れないように */
             border: var(--border-width) solid var(--text-color);
             background: var(--accent-color);
-            margin-right: 15px;
+            margin-right: 10px;
             object-fit: cover;
             border-radius: 50%;
             transition: border-color 0.3s;
@@ -132,103 +149,133 @@
         
         .user-message .message-content {
             background: #000; color: #fff; 
-            box-shadow: -6px 6px 0 rgba(255,247,0,0.5);
+            box-shadow: -4px 4px 0 rgba(255,247,0,0.5);
             margin-right: 0;
         }
 
         .message-content {
             background: #fff; border: var(--border-width) solid var(--text-color);
-            padding: 1rem; position: relative;
-            box-shadow: var(--shadow-offset) var(--shadow-offset) 0 rgba(0,0,0,0.2);
+            padding: 0.8rem; position: relative;
+            box-shadow: 4px 4px 0 rgba(0,0,0,0.2);
             font-size: 0.95rem; word-wrap: break-word;
-            transition: background-color 0.3s, border-color 0.3s, color 0.3s;
+            line-height: 1.6;
+            border-radius: 4px;
         }
 
         body.dark-mode .bot-message .message-content {
             background: #000; color: #fff; border-color: #fff;
-            box-shadow: 6px 6px 0 rgba(255,255,255,0.2);
+            box-shadow: 4px 4px 0 rgba(255,255,255,0.2);
         }
         body.dark-mode .user-message .message-content {
             background: var(--accent-color); color: #000; border-color: #fff;
-            box-shadow: -6px 6px 0 rgba(255,255,255,0.5);
+            box-shadow: -4px 4px 0 rgba(255,255,255,0.5);
         }
 
+        /* --- Input Area --- */
         .input-area {
-            background: var(--accent-color); border-top: var(--border-width) solid var(--text-color);
-            padding: 1.5rem; display: flex; gap: 1rem; align-items: stretch;
+            background: var(--accent-color); 
+            border-top: var(--border-width) solid var(--text-color);
+            padding: 10px; /* スマホ用に狭く */
+            display: flex; gap: 8px; align-items: center;
             position: relative; z-index: 20; transition: background-color 0.3s, border-color 0.3s;
+            flex-shrink: 0;
+            padding-bottom: max(10px, env(safe-area-inset-bottom)); /* iPhone X以降対応 */
         }
         body.dark-mode .input-area { background: #333; border-top-color: #fff; }
 
         #user-input {
-            flex: 1; padding: 1rem; font-family: 'JetBrains Mono', monospace;
-            font-size: 1rem; border: var(--border-width) solid var(--text-color);
-            outline: none; box-shadow: inset 4px 4px 0 rgba(0,0,0,0.1);
+            flex: 1; 
+            padding: 10px; 
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 16px; /* ★重要: 16px未満だとiPhoneでズームしてしまう */
+            border: var(--border-width) solid var(--text-color);
+            outline: none; box-shadow: inset 3px 3px 0 rgba(0,0,0,0.1);
+            border-radius: 0; /* スマホの丸みを除去 */
+            -webkit-appearance: none;
         }
         body.dark-mode #user-input {
             background: #000; color: #fff; border-color: #fff;
-            box-shadow: inset 4px 4px 0 rgba(255,255,255,0.1);
+            box-shadow: inset 3px 3px 0 rgba(255,255,255,0.1);
         }
-        #user-input:focus { background-color: #fff; }
-        body.dark-mode #user-input:focus { background-color: #222; }
 
         .input-area button {
-            padding: 0 2rem; font-family: 'JetBrains Mono', monospace;
-            font-weight: 800; font-size: 1rem;
+            padding: 0 15px; height: 46px; /* 高さを入力欄に合わせる */
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 800; font-size: 0.9rem;
             background: var(--text-color); color: #fff;
             border: var(--border-width) solid var(--text-color);
             cursor: pointer; transition: all 0.1s; text-transform: uppercase;
-            box-shadow: 4px 4px 0 #fff;
+            box-shadow: 3px 3px 0 #fff;
+            white-space: nowrap;
         }
         body.dark-mode .input-area button {
             background: var(--accent-color); color: #000;
-            border-color: #fff; box-shadow: 4px 4px 0 #fff;
+            border-color: #fff; box-shadow: 3px 3px 0 #fff;
         }
-        .input-area button:hover {
-            background: #fff; color: var(--text-color); transform: translate(2px, 2px);
-            box-shadow: 2px 2px 0 var(--text-color);
-        }
-        body.dark-mode .input-area button:hover {
-            background: #fff; color: #000; box-shadow: 2px 2px 0 #000; border-color: #000;
+        .input-area button:active {
+            transform: translate(2px, 2px);
+            box-shadow: none;
         }
 
+        /* --- Footer --- */
         footer {
             background: var(--text-color); color: #fff;
-            padding: 0.5rem 1rem; font-size: 0.8rem;
+            padding: 5px 10px; 
+            font-size: 0.75rem;
             border-top: 1px solid #fff; text-align: center;
             transition: background-color 0.3s;
+            flex-shrink: 0;
+            padding-bottom: max(5px, env(safe-area-inset-bottom));
         }
         body.dark-mode footer { background: #000; border-top-color: #333; }
         
         .file-list-container {
-            display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; margin-top: 5px;
+            display: flex; 
+            justify-content: center; 
+            flex-wrap: wrap; /* 画面幅に合わせて折り返す */
+            gap: 8px; 
+            margin-top: 3px;
+            max-height: 60px; /* フッターが広がりすぎないように制限 */
+            overflow-y: auto; /* 多い場合はスクロール */
         }
         
-        /* ★リンク用にスタイルを変更 */
         .file-badge {
             background: #333; color: var(--accent-color); padding: 2px 8px;
             border: 1px solid var(--accent-color); border-radius: 4px; font-size: 0.7rem;
-            text-decoration: none; /* 下線を消す */
+            text-decoration: none; 
             cursor: pointer;
-            transition: all 0.2s;
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-        }
-        
-        .file-badge:hover {
-            background: var(--accent-color);
-            color: #000;
-            transform: translateY(-2px);
+            display: inline-flex; align-items: center; gap: 4px;
+            white-space: nowrap; /* 途中で改行しない */
         }
 
-        @media (max-width: 768px) {
-            h1 { font-size: 1.8rem; padding: 0.5rem 1rem; }
-            .back-button-container { position: static; transform: none; margin-bottom: 1rem; align-self: flex-start; }
-            header { padding: 1rem; align-items: center; }
-            .input-area { padding: 1rem; flex-direction: column; }
-            .chat-message { max-width: 100%; }
-            .cursor-trail { display: none; }
+        /* --- Mobile Responsive Tweaks --- */
+        @media (max-width: 600px) {
+            h1 { 
+                font-size: 1.2rem; 
+                padding: 0.3rem 0.8rem;
+                max-width: 160px;
+            }
+            .back-button span {
+                display: none; /* スマホでは「TOP」の文字を消してアイコンだけにする */
+            }
+            .back-button {
+                padding: 0.4rem;
+            }
+            .back-button i {
+                margin: 0;
+            }
+            
+            #chat-container {
+                padding: 10px;
+            }
+            
+            .chat-message {
+                max-width: 95%; /* 画面いっぱい使う */
+            }
+            
+            .cursor-trail {
+                display: none !important; /* スマホではパーティクルを消す */
+            }
         }
     </style>
 </head>
@@ -236,10 +283,10 @@
     <header>
         <div class="back-button-container">
             <a href="https://www.bit.urayama.ac.jp/" class="back-button">
-                <i class="fas fa-arrow-left"></i> TOP
+                <i class="fas fa-arrow-left"></i> <span>TOP</span>
             </a>
         </div>
-        <h1 id="mode-toggle" title="Click to toggle Dark Mode">School AI Bot</h1>
+        <h1 id="mode-toggle" title="Click to toggle Dark Mode">School Bot</h1>
     </header>
 
     <main id="chat-container">
@@ -253,34 +300,38 @@
     </main>
 
     <div class="input-area">
-        <input type="text" id="user-input" placeholder="質問を入力してください..." onkeypress="handleKeyPress(event)">
+        <input type="text" id="user-input" placeholder="質問を入力..." onkeypress="handleKeyPress(event)">
         <button onclick="sendMessage()">送信</button>
     </div>
 
     <footer>
-        <p>参照ファイル (CLICK TO OPEN PDF):</p>
+        <p>SOURCE FILES:</p>
         <div class="file-list-container">
             {% for file in files %}
                 <a href="{{ file.url }}" target="_blank" class="file-badge">
                     <i class="far fa-file-pdf"></i> {{ file.name }}
                 </a>
             {% else %}
-                <span>NO DATA LOADED</span>
+                <span>NO DATA</span>
             {% endfor %}
         </div>
     </footer>
 
     <script>
-        // JSは先ほどと同じ「記憶機能付き」のものです
+        // --- Dark Mode ---
         const modeToggle = document.getElementById('mode-toggle');
         modeToggle.addEventListener('click', () => {
             document.body.classList.toggle('dark-mode');
         });
 
+        // --- Trail Logic (PC Only) ---
         let lastTrailTime = 0;
-        document.addEventListener('mousemove', (e) => {
-            createTrail(e.clientX, e.clientY);
-        });
+        // スマホのタッチイベントでは発動させない
+        if (window.matchMedia("(min-width: 768px)").matches) {
+            document.addEventListener('mousemove', (e) => {
+                createTrail(e.clientX, e.clientY);
+            });
+        }
 
         function createTrail(x, y) {
             const now = Date.now();
@@ -298,9 +349,9 @@
             setTimeout(() => { trail.remove(); }, 600);
         }
 
+        // --- Chat Logic ---
         const chatContainer = document.getElementById('chat-container');
         const userInput = document.getElementById('user-input');
-        
         let conversationHistory = [];
 
         function handleKeyPress(event) {
@@ -312,6 +363,9 @@
         async function sendMessage() {
             const text = userInput.value.trim();
             if (text === '') return;
+
+            // スマホのキーボードを閉じる（任意：使い勝手による）
+            // userInput.blur(); 
 
             addMessage(text, 'user');
             userInput.value = '';
@@ -338,19 +392,22 @@
 
             } catch (error) {
                 removeLoadingIndicator(loadingId);
-                addMessage('サーバー通信エラーが発生しました。', 'bot');
+                addMessage('通信エラーが発生しました。', 'bot');
             }
         }
 
         function addMessage(text, sender) {
             const messageDiv = document.createElement('div');
             messageDiv.className = `chat-message ${sender}-message`;
+            
             let iconHtml = '';
             if (sender === 'bot') {
                 iconHtml = `<img src="{{ url_for('static', filename='bitboticon.png') }}" class="bot-icon" onerror="this.style.display='none'">`;
             }
+            
             const safeText = text.replace(/\n/g, '<br>');
             messageDiv.innerHTML = `${sender === 'bot' ? iconHtml : ''}<div class="message-content">${safeText}</div>`;
+            
             chatContainer.appendChild(messageDiv);
             scrollToBottom();
         }
@@ -374,6 +431,9 @@
         function scrollToBottom() {
             chatContainer.scrollTop = chatContainer.scrollHeight;
         }
+        
+        // 画面サイズが変わった時（キーボードが出た時など）もスクロール
+        window.addEventListener('resize', scrollToBottom);
     </script>
 </body>
 </html>
