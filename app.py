@@ -25,7 +25,7 @@ DRIVE_FOLDER_ID = '1fJ3Mbrcw-joAsX33aBu0z4oSQu7I0PhP'
 SPREADSHEET_ID = '1NK0ixXY9hOWuMib22wZxmFX6apUV7EhTDawTXPganZg'
 
 # Model Setting (Using 1.5-flash for better file handling)
-model = genai.GenerativeModel('models/gemini-1.5-flash')
+model = genai.GenerativeModel('models/gemini-2.0-flash')
 
 # Global Variables
 UPLOADED_FILES_CACHE = [] 
