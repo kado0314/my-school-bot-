@@ -25,7 +25,7 @@ DRIVE_FOLDER_ID = '1fJ3Mbrcw-joAsX33aBu0z4oSQu7I0PhP'
 SPREADSHEET_ID = '1NK0ixXY9hOWuMib22wZxmFX6apUV7EhTDawTXPganZg'
 
 # Model Setting (Using 1.5-flash for better file handling)
-model = genai.GenerativeModel('models/gemini-2.0-flash')
+model = genai.GenerativeModel('models/gemini-2.5-flash-lite')
 
 # Global Variables
 UPLOADED_FILES_CACHE = [] 
@@ -176,7 +176,7 @@ def chat():
     # System Prompt (Japanese)
     # Note: Using simple Japanese to avoid encoding issues
     system_instruction = """
-    あなたは厳格な事実確認を行う学校の質問応答システムです。
+    あなたは学校の質問応答システムです。
     
     【重要ルール】
     1. 添付された資料(PDF)の内容を根拠に回答してください。
